@@ -37,6 +37,11 @@ Bir şey ters giderse:
 
 Her madde için GEÇTİ ya da KALDI yazar (hizmet, yerel portlar, PAC, hosts bloğu, seçili strateji, Discord bağlantısı, Discord dışı site). Her KALDI'nın altında ne yapman gerektiği tek satırla yazar. Bu komut hiçbir ayarı değiştirmez.
 
+Kur, kaldır, kontrol ve yeniden ayarla her çalışmada tam çıktıyı bir log dosyasına yazar; yolu pencerenin ilk satırında ve hata mesajının altında yazar. Hata olursa pencere kapanmaz, hangi adımda durduğunu gösterip Enter bekler. Yardım isterken bu dosyayı gönder:
+
+* Windows: `%LOCALAPPDATA%\DiscordEngelAsici\log\kur-<tarih>.log` (kaldırma: `%TEMP%\DiscordEngelAsici\kaldir-<tarih>.log`)
+* Mac: `~/Library/Application Support/DiscordEngelAsici/log/kur-<tarih>.log` (kaldırma: `$TMPDIR/DiscordEngelAsici/kaldir-<tarih>.log`)
+
 İnternet sağlayıcın değiştiyse ya da Discord bir gün yine açılmazsa: Windows `windows\YENIDEN-AYARLA.cmd`, Mac `mac/YENIDEN-AYARLA.command`. Ayarları yeniden dener, çalışanı seçer. Yönetici izni istemez.
 
 ### 4. Kaldır

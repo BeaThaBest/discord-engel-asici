@@ -15,6 +15,28 @@ UID_NUM="$(id -u)"
 DURMA_SURESI="${DURMA_SURESI:-40}"    # x 0.5 sn
 BASLAMA_SURESI="${BASLAMA_SURESI:-60}"  # x 0.5 sn
 
+# Teshis: gunluk_baslat ad dizin, bundan sonraki tum ciktiyi (stdout ve stderr) hem ekrana hem
+# dizin/ad-TARIH.log dosyasina yazar. Basarisiz cikista son adim (adim islevi), cikis kodu ve log yolu
+# yazilir. EXIT trap'i bu islevindir: gecici dizin GECICI_DIZIN'e verilir, cikista silinir.
+ADIM="baslangic"
+adim() { ADIM="$1"; echo "$1 $2"; }
+gunluk_baslat() {
+  mkdir -p "$2" || return 1
+  GUNLUK="$2/$1-$(date +%Y%m%d-%H%M%S).log"
+  exec > >(tee -a "$GUNLUK") 2>&1
+  echo "Log: $GUNLUK"
+  trap gunluk_bitis EXIT
+}
+gunluk_bitis() {
+  local k=$?
+  [ -n "${GECICI_DIZIN:-}" ] && rm -rf "$GECICI_DIZIN"
+  if [ "$k" -ne 0 ]; then
+    echo ""
+    echo "HATA: adim $ADIM, cikis kodu $k. Tam cikti: $GUNLUK"
+  fi
+  return "$k"
+}
+
 pid_of() { launchctl list | awk -v l="$1" '$3==l && $1!="-" {print $1}'; }
 port_pid() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true; }
 yuklu_mu() { launchctl print "gui/$UID_NUM/$1" >/dev/null 2>&1; }

@@ -5,7 +5,9 @@
 # Yonetici ister (hosts blogu): yukseltilmediyse kendini bir kez UAC ile yeniden baslatir.
 # Cikis kodlari: 0 tamam, 1 genel hata, 3 dogrulama gecmedi (geri alindi), 4 port 443 dolu, 5 yonetici izni yok,
 # 6 calisan strateji bulunamadi.
-param([string]$MotorYolu, [switch]$Yukseltildi)
+# Her calisma tam ciktiyi %LOCALAPPDATA%\DiscordEngelAsici\log\kur-TARIH.log dosyasina yazar; UAC ile acilan
+# yukseltilmis pencere -Gunluk ile ayni dosyaya devam eder ve hata olursa kapanmadan Enter bekler.
+param([string]$MotorYolu, [switch]$Yukseltildi, [string]$Gunluk)
 . (Join-Path $PSScriptRoot 'islevler.ps1')
 $REPO = Split-Path -Parent $PSScriptRoot
 
@@ -18,22 +20,31 @@ function Indir-Dogrula($url, $sha, $hedef) {
 function Ozet($yol) { return (Get-FileHash -Algorithm SHA256 -LiteralPath $yol).Hash.ToLower() }
 
 $KOD = 1
-function Pencere-Bekle {
-    # Yukseltilmis pencere bitince kapanir; mesaj okunabilsin.
-    if ($Yukseltildi) { Write-Host 'Bu pencere 20 saniye sonra kapanir.'; Start-Sleep -Seconds 20 }
-}
+if (-not $Gunluk) { $Gunluk = Gunluk-Yolu 'kur' }
+Gunluk-Baslat $Gunluk
+Write-Host "Log: $Gunluk"
 
 $hostsYazildi = $false
 if (-not $Yukseltildi -and -not (Yonetici-Mi)) {
     try {
-        $ek = ''
-        if ($MotorYolu) { $ek = '-MotorYolu "{0}"' -f (Resolve-Path -LiteralPath $MotorYolu).Path }
+        $ek = '-Gunluk "{0}"' -f $Gunluk
+        if ($MotorYolu) { $ek += ' -MotorYolu "{0}"' -f (Resolve-Path -LiteralPath $MotorYolu).Path }
+        Gunluk-Bitir  # yukseltilmis cocuk ayni dosyaya yazar
         $k = Yukselt-Gerekirse $PSCommandPath $ek
-        exit $k
+        Gunluk-Baslat $Gunluk
     } catch {
-        Write-Host "HATA: $($_.Exception.Message)" -ForegroundColor Red
+        Gunluk-Baslat $Gunluk
+        Hata-Bildir $_.Exception.Message $Gunluk $false
+        Gunluk-Bitir
         exit 5
     }
+    if ($k -eq 0) {
+        Write-Host 'KURULUM TAMAM (yukseltilmis pencerede).'
+    } else {
+        Write-Host "HATA: kurulum basarisiz, cikis kodu $k. Hata ve adim yukseltilmis pencerede ve log dosyasinda: $Gunluk" -ForegroundColor Red
+    }
+    Gunluk-Bitir
+    exit $k
 }
 
 try {
@@ -43,10 +54,10 @@ try {
     $TMP = Join-Path $env:TEMP ('dea-kur-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $APP, (Join-Path $APP 'log'), (Join-Path $APP 'ortak'), $TMP | Out-Null
 
-    Write-Host '1/8 Onceki proxy ayarlarinin yedegi'
+    Adim '1/8' 'Onceki proxy ayarlarinin yedegi'
     Yedekle
 
-    Write-Host '2/8 Eski hizmet durduruluyor (varsa)'
+    Adim '2/8' 'Eski hizmet durduruluyor (varsa)'
     if (Get-ScheduledTask -TaskName $GOREV -ErrorAction SilentlyContinue) {
         # Once devre disi: 5 dk bekcisi dosyalar degisirken yeniden baslatmasin.
         Disable-ScheduledTask -TaskName $GOREV -ErrorAction SilentlyContinue | Out-Null
@@ -58,7 +69,7 @@ try {
         throw "Port $SNI_PORT baska bir surecte dolu: $(Port-Sahibi $SNI_PORT). Discord guncelleyicisi icin 127.0.0.1:$SNI_PORT gerekir. O hizmeti (IIS, VMware, Skype vb.) durdurup yeniden dene."
     }
 
-    Write-Host "3/8 Python $($S.PYTHON_WIN_SURUM) (gomulu, konsolsuz pythonw)"
+    Adim '3/8' "Python $($S.PYTHON_WIN_SURUM) (gomulu, konsolsuz pythonw)"
     $pyDizin = Join-Path $APP 'python'
     $pyIsaret = Join-Path $pyDizin 'DEA-SURUM.txt'
     $pyTamam = (Test-Path -LiteralPath (Join-Path $pyDizin 'pythonw.exe')) -and (Test-Path -LiteralPath $pyIsaret) -and
@@ -71,7 +82,7 @@ try {
         Set-Content -LiteralPath $pyIsaret -Value $S.PYTHON_WIN_SURUM -Encoding ASCII
     }
 
-    Write-Host '4/8 Motor (ByeDPI) ve ortak dosyalar'
+    Adim '4/8' 'Motor (ByeDPI) ve ortak dosyalar'
     $motor = Join-Path $APP 'ciadpi.exe'
     if ($MotorYolu) {
         Copy-Item -LiteralPath $MotorYolu -Destination $motor -Force
@@ -89,17 +100,16 @@ try {
         Copy-Item -LiteralPath (Join-Path $REPO "ortak\$f") -Destination (Join-Path $APP "ortak\$f") -Force
     }
 
-    Write-Host '5/8 Strateji (bu internet saglayicisinda calisan ByeDPI ayari)'
+    Adim '5/8' 'Strateji (bu internet saglayicisinda calisan ByeDPI ayari)'
     if (Test-Path -LiteralPath $STRATEJI) {
-        & $PY_APP -I (Join-Path $APP 'ortak\strateji.py') goster --strateji $STRATEJI | Write-Host
-        if ($LASTEXITCODE -ne 0) { $KOD = 6; throw "$STRATEJI bozuk. windows\YENIDEN-AYARLA.cmd calistir." }
+        if ((Yerel-Calistir $PY_APP @('-I', (Join-Path $APP 'ortak\strateji.py'), 'goster', '--strateji', $STRATEJI)) -ne 0) { $KOD = 6; throw "$STRATEJI bozuk. windows\YENIDEN-AYARLA.cmd calistir." }
         Write-Host '  Var olan secim korunuyor (degistirmek icin windows\YENIDEN-AYARLA.cmd).'
     } elseif ((Strateji-Sec) -ne 0) {
         $KOD = 6
         throw 'Calisan strateji bulunamadi. Kurulum durdu, proxy ve hosts ayari degismedi.'
     }
 
-    Write-Host '6/8 Gorev Zamanlayici'
+    Adim '6/8' 'Gorev Zamanlayici'
     $tur = $null
     if (Yonetici-Mi) {
         try {
@@ -120,7 +130,7 @@ try {
         throw 'Hizmet 60 sn icinde hazir olmadi. Proxy ayari ACILMADI, internet etkilenmedi.'
     }
 
-    Write-Host '7/8 hosts blogu ve dogrulama (updates.discord.com)'
+    Adim '7/8' 'hosts blogu ve dogrulama (updates.discord.com)'
     $hostsYazildi = $true
     Hosts-Islem 'yaz'
     $yanit = '000'
@@ -137,7 +147,7 @@ try {
     }
     Write-Host "  updates.discord.com yaniti: $yanit"
 
-    Write-Host '8/8 Yalniz Discord icin PAC ayari ve eski HTTPS_PROXY temizligi'
+    Adim '8/8' 'Yalniz Discord icin PAC ayari ve eski HTTPS_PROXY temizligi'
     Yonlendirmeyi-Ac
     Remove-Item -LiteralPath $TMP -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -148,14 +158,14 @@ try {
     if (Get-Process -Name Discord -ErrorAction SilentlyContinue) {
         Write-Host 'Discord acik: bir kez tamamen kapatip (tepsiden Cikis) yeniden ac.'
     }
-    Pencere-Bekle
+    Gunluk-Bitir
     exit 0
 } catch {
-    Write-Host ''
-    Write-Host "HATA: $($_.Exception.Message)" -ForegroundColor Red
+    $hata = $_.Exception.Message
     if ($hostsYazildi) {
         try { Hosts-Islem 'kaldir'; Write-Host 'hosts blogu geri alindi.' } catch { Write-Warning "hosts blogu geri alinamadi: $($_.Exception.Message)" }
     }
-    Pencere-Bekle
+    Hata-Bildir $hata $Gunluk $Yukseltildi
+    Gunluk-Bitir
     exit $KOD
 }

@@ -5,6 +5,10 @@ MAC="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(dirname "$MAC")"
 APP="$HOME/Library/Application Support/DiscordEngelAsici"
 OTO="$HOME/Library/Application Support/Otomasyon"
+# Tam cikti $APP/log/kur-TARIH.log; hata olursa adim ve log yolu yazilir (hizmetler.sh gunluk_baslat).
+# HIZMETLER, LA, UID_NUM, PAC_URL, durdur/baslat, PAC ve plist islevleri tek kaynaktan.
+. "$MAC/hizmetler.sh"
+gunluk_baslat kur "$APP/log"
 
 # Onkosul: ByeDPI kaynaktan derlenir (make, cc) ve /usr/bin/python3 de bu araclarla gelir.
 if [ ! -x "$REPO/motor/bin/ciadpi" ] && ! xcode-select -p >/dev/null 2>&1; then
@@ -19,8 +23,6 @@ if [ -z "$PY" ] || ! "$PY" -c 'import ssl' >/dev/null 2>&1; then
   exit 1
 fi
 
-# HIZMETLER, LA, UID_NUM, PAC_URL, durdur/baslat, PAC ve plist islevleri tek kaynaktan.
-. "$MAC/hizmetler.sh"
 # Eski tasarim (genel HTTPS_PROXY + kopru). Yeni sistem dogrulaninca kaldirilir.
 ESKI_ETIKETLER=(com.discord-engel-asici-bridge com.discord-engel-asici-env)
 ESKI_PROXY="http://127.0.0.1:1098"
@@ -30,11 +32,11 @@ ADLAR_PAC="Discord Engel Aşıcı PAC Sunucusu (Kapatma)"
 ADLAR_SNI="Discord Engel Aşıcı SNI Dinleyici (Kapatma)"
 ESKI_ADLAR=("Discord Engel Aşıcı Güncelleme Köprüsü (Kapatma)" "Discord Engel Aşıcı Proxy Ayarı (Kapatma)")
 
-echo "1/9 Motor"
+adim "1/9" "Motor"
 [ -x "$REPO/motor/bin/ciadpi" ] || "$REPO/motor/derle-mac.sh"
 [ -x "$REPO/motor/bin/ciadpi" ] || { echo "HATA: motor yok, derleme basarisiz" >&2; exit 1; }
 
-echo "2/9 Strateji (bu internet saglayicisinda calisan ByeDPI ayari)"
+adim "2/9" "Strateji (bu internet saglayicisinda calisan ByeDPI ayari)"
 mkdir -p "$APP"
 if [ -f "$APP/strateji.json" ]; then
   "$PY" "$REPO/ortak/strateji.py" goster --strateji "$APP/strateji.json" \
@@ -45,14 +47,14 @@ else
     || { echo "HATA: calisan strateji bulunamadi, kurulum durdu. Hicbir ayar degismedi." >&2; exit 6; }
 fi
 
-echo "3/9 Mevcut plist yedegi"
+adim "3/9" "Mevcut plist yedegi"
 YEDEK="$APP/yedek/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$YEDEK" "$APP/log" "$OTO" "$LA"
 for p in "$LA"/com.discord-engel-asici*.plist; do
   [ -e "$p" ] && cp "$p" "$YEDEK/"
 done
 
-echo "4/9 Calisma dosyalari"
+adim "4/9" "Calisma dosyalari"
 cp "$REPO/motor/bin/ciadpi" "$APP/DiscordEngelAsici.yeni" && mv -f "$APP/DiscordEngelAsici.yeni" "$APP/DiscordEngelAsici"
 for f in alanlar.py gunluk.py dns_a.py sni_dinleyici.py hosts_blok.py strateji.py; do
   cp "$REPO/ortak/$f" "$APP/$f"
@@ -66,16 +68,16 @@ ln -sfn "$APP/DiscordEngelAsici" "$OTO/$ADLAR_DL"
 ln -sfn "$PY" "$OTO/$ADLAR_PAC"
 ln -sfn "$PY" "$OTO/$ADLAR_SNI"
 
-echo "5/9 Plist yazimi (kullanici agent'lari, motor argumanlari strateji.json'dan)"
+adim "5/9" "Plist yazimi (kullanici agent'lari, motor argumanlari strateji.json'dan)"
 plistleri_yaz || { echo "HATA: plist yazilamadi" >&2; exit 1; }
 
-echo "6/9 Hizmetleri yeniden yukle"
+adim "6/9" "Hizmetleri yeniden yukle"
 hizmetleri_yeniden_yukle || exit 1
 rm -f "$APP/proxy.pac"   # eski surumun kok klasordeki kopyasi
 
-echo "7/9 Yonetici adimi (hosts blogu + 443 LaunchDaemon + dogrulama)"
+adim "7/9" "Yonetici adimi (hosts blogu + 443 LaunchDaemon + dogrulama)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+GECICI_DIZIN="$TMP"   # gunluk_bitis cikista siler
 chmod 700 "$TMP"
 # Repo ~/Desktop gibi TCC korumali klasorde olabilir: root yetki adimi oradan calistirilamaz
 # (Operation not permitted). Root'un calistiracagi betik korumasiz temp dizinden calisir.
@@ -90,7 +92,7 @@ if ! "$TMP/yonetici.sh" kur "$(id -un)" "$TMP/hosts.yeni" "$TMP/sni.plist"; then
   exit 3
 fi
 
-echo "8/9 Eski sistem kaldiriliyor (dogrulama gecti)"
+adim "8/9" "Eski sistem kaldiriliyor (dogrulama gecti)"
 for e in "${ESKI_ETIKETLER[@]}"; do
   launchctl bootout "gui/$UID_NUM/$e" 2>/dev/null || true
   rm -f "$LA/$e.plist"   # yedegi adim 2'de $YEDEK altina alindi
@@ -102,7 +104,7 @@ if [ "$(launchctl getenv HTTPS_PROXY 2>/dev/null || true)" = "$ESKI_PROXY" ]; th
   launchctl unsetenv HTTPS_PROXY
 fi
 
-echo "9/9 Sistem PAC ayari (etkin butun ag hizmetleri)"
+adim "9/9" "Sistem PAC ayari (etkin butun ag hizmetleri)"
 pac_ac || { echo "HATA: PAC ayari yazilamadi" >&2; exit 1; }
 echo "Kurulum tamam. Yedek: $YEDEK"
 echo "Kontrol: mac/kontrol.sh"

@@ -9,6 +9,8 @@ APP="$HOME/Library/Application Support/DiscordEngelAsici"
 OTO="$HOME/Library/Application Support/Otomasyon"
 PY="$(command -v python3 || true)"
 . "$MAC/hizmetler.sh"
+ADIM="yeniden-ayarla"
+gunluk_baslat yeniden-ayarla "$APP/log"
 [ -n "$PY" ] || { echo "HATA: python3 yok" >&2; exit 1; }
 [ -x "$APP/DiscordEngelAsici" ] && [ -f "$APP/strateji.py" ] || { echo "HATA: kurulum yok ya da eski, once mac/KUR.command" >&2; exit 1; }
 

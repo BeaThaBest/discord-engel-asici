@@ -16,10 +16,52 @@ $HOSTS = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $STRATEJI = Join-Path $APP 'strateji.json'
 $PY_APP = Join-Path $APP 'python\python.exe'
 
+# Calisilan adim (Adim yazar, Hata-Bildir okur).
+$ADIM = 'baslangic'
+$GUNLUK_ACIK = $false
+
+function Adim([string]$no, [string]$metin) {
+    $script:ADIM = $no
+    Write-Host "$no $metin"
+}
+
+function Gunluk-Yolu([string]$ad, [switch]$Gecici) {
+    # Her calisma ayri dosya. Gecici: kaldirma kurulum klasorunu sildigi icin TEMP altina yazar.
+    if ($Gecici) { $d = Join-Path $env:TEMP 'DiscordEngelAsici' } else { $d = Join-Path $APP 'log' }
+    New-Item -ItemType Directory -Force -Path $d | Out-Null
+    return Join-Path $d ('{0}-{1}.log' -f $ad, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+}
+
+function Gunluk-Baslat([string]$yol) {
+    # Ekrana yazilan her sey $yol'a da eklenir (UAC cocugu ayni dosyaya devam eder).
+    Start-Transcript -LiteralPath $yol -Append | Out-Null
+    $script:GUNLUK_ACIK = $true
+}
+
+function Gunluk-Bitir {
+    if ($script:GUNLUK_ACIK) { Stop-Transcript | Out-Null; $script:GUNLUK_ACIK = $false }
+}
+
+function Hata-Bildir([string]$mesaj, [string]$gunluk, [bool]$bekle) {
+    # Yukseltilmis pencere hata sonrasi kapanir: $bekle ise mesaj okunana kadar Enter bekler.
+    Write-Host ''
+    Write-Host "HATA (adim $script:ADIM): $mesaj" -ForegroundColor Red
+    Write-Host "Tam cikti: $gunluk"
+    if ($bekle) { [void](Read-Host 'Pencereyi kapatmak icin Enter') }
+}
+
+function Yerel-Calistir([string]$exe, [string[]]$argv) {
+    # PowerShell 5.1 transcript'i dogrudan konsola yazan yerel programin ciktisini almaz:
+    # stdout ve stderr Write-Host'tan gecer. Cikis kodunu dondurur.
+    $eski = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $exe @argv 2>&1 | ForEach-Object { Write-Host "$_" } } finally { $ErrorActionPreference = $eski }
+    return $LASTEXITCODE
+}
+
 function Strateji-Sec {
     # Adaylari dener, ilk calisani $STRATEJI'ye yazar. Cikis kodunu dondurur (0 tamam, 2 hicbiri).
-    & $PY_APP -I (Join-Path $APP 'ortak\strateji.py') sec --motor (Join-Path $APP 'ciadpi.exe') --yaz $STRATEJI | Write-Host
-    return $LASTEXITCODE
+    return (Yerel-Calistir $PY_APP @('-I', (Join-Path $APP 'ortak\strateji.py'), 'sec', '--motor', (Join-Path $APP 'ciadpi.exe'), '--yaz', $STRATEJI))
 }
 
 function Yonetici-Mi {
@@ -199,8 +241,8 @@ function Hosts-Islem([string]$komut) {
     $pb = Hosts-Python-Bul
     $a = @('-I', $pb[1], $komut, '--hosts', $HOSTS)
     if ($komut -eq 'yaz') { $a += @('--alanlar', (Join-Path $APP 'ortak\alanlar.txt')) }
-    & $pb[0] @a
-    if ($LASTEXITCODE -ne 0) { throw "hosts blogu ($komut) basarisiz, kod $LASTEXITCODE." }
+    $k = Yerel-Calistir $pb[0] $a
+    if ($k -ne 0) { throw "hosts blogu ($komut) basarisiz, kod $k." }
     Dns-Temizle
 }
 

@@ -8,13 +8,15 @@ MAC="$(cd "$(dirname "$0")" && pwd)"
 UID_NUM="$(id -u)"
 LA="$HOME/Library/LaunchAgents"
 OTO="$HOME/Library/Application Support/Otomasyon"
-. "$MAC/hizmetler.sh"   # pac_kapat
+. "$MAC/hizmetler.sh"   # pac_kapat, gunluk_baslat
+# Calisma klasoru silinecegi icin tam cikti gecici dizine yazilir.
+gunluk_baslat kaldir "${TMPDIR:-/tmp}/DiscordEngelAsici"
 
 # Once yetkili adim: basarisizsa (sifre iptal) hicbir sey yarim kalmaz.
 if [ -e /Library/LaunchDaemons/com.discord-engel-asici-sni.plist ] || grep -q -F "# >>> DiscordEngelAsici >>>" /etc/hosts 2>/dev/null; then
   # Repo TCC korumali klasorde olabilir (~/Desktop): root betigi korumasiz temp dizinden calisir.
   TMP="$(mktemp -d)"
-  trap 'rm -rf "$TMP"' EXIT
+  GECICI_DIZIN="$TMP"   # gunluk_bitis cikista siler
   chmod 700 "$TMP"
   cp "$MAC/yonetici.sh" "$TMP/yonetici.sh"
   chmod 700 "$TMP/yonetici.sh"
