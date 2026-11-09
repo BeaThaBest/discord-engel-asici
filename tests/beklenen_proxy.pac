@@ -1,5 +1,6 @@
 function FindProxyForURL(url, host) {
     if (shExpMatch(host, "*.dl2-*.discordapp.net")) return "SOCKS5 127.0.0.1:1091; SOCKS 127.0.0.1:1091";
+    if (host === "updates.discord.com") return "DIRECT";
     if (host === "dl2.discordapp.net" || dnsDomainIs(host, ".dl2.discordapp.net")) return "SOCKS5 127.0.0.1:1091; SOCKS 127.0.0.1:1091";
     if (host === "discordstatus.com" || dnsDomainIs(host, ".discordstatus.com")) return "SOCKS5 127.0.0.1:1080; SOCKS 127.0.0.1:1080";
     if (host === "dl.discordapp.net" || dnsDomainIs(host, ".dl.discordapp.net")) return "SOCKS5 127.0.0.1:1091; SOCKS 127.0.0.1:1091";

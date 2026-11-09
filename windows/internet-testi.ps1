@@ -23,11 +23,10 @@ $DISCORD_UCLAR = 'https://discord.com/api/v9/gateway', 'https://cdn.discordapp.c
     'https://dl2.discordapp.net/', 'https://media.discordapp.net/'
 $INDIRME = 'https://speed.cloudflare.com/__down?bytes=25000000'
 $PING_HEDEF = '1.1.1.1', '8.8.8.8'
-# Discord dogrudan, ana SOCKS (1080) ve guncelleyici yolu (kopru 1098) ile denenir.
+# Discord dogrudan (proxysiz; updates.discord.com hosts blogu ile 443 SNI dinleyiciye gider) ve ana SOCKS (1080) ile denenir.
 $YOLLAR = [ordered]@{
     dogrudan = @('--noproxy', '*')
     socks1080 = @('-x', 'socks5h://127.0.0.1:1080')
-    kopru1098 = @('-x', 'http://127.0.0.1:1098')
 }
 
 function Json-Yolu($d) { return (Join-Path $Klasor "dea-internet-testi-$d.json") }
@@ -71,6 +70,16 @@ function Ping-Olc($ip) {
     return [ordered]@{ hedef = $ip; ort_ms = $ort; kayip = "$kayip/5" }
 }
 
+function Port-Dinliyor($port) {
+    $c = New-Object Net.Sockets.TcpClient
+    try { $c.Connect('127.0.0.1', $port); return $true } catch { return $false } finally { $c.Close() }
+}
+
+function Hosts-Blogu-Var {
+    $h = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
+    return [bool](Select-String -LiteralPath $h -Pattern '>>> DiscordEngelAsici >>>' -SimpleMatch -Quiet -ErrorAction SilentlyContinue)
+}
+
 function Durum-Bilgisi {
     $gs = @(Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*GoodbyeDPI*' -or $_.DisplayName -like '*GoodbyeDPI*' } |
         ForEach-Object { "$($_.Name)=$($_.Status)/$($_.StartType)" })
@@ -79,13 +88,13 @@ function Durum-Bilgisi {
     $gp = @(Get-Process -Name 'goodbyedpi*' -ErrorAction SilentlyContinue).Count
     $gorev = Get-ScheduledTask -TaskName 'DiscordEngelAsici' -ErrorAction SilentlyContinue
     $dinleyen = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
-        Where-Object { $_.LocalPort -in 1080, 1091, 1098, 1099 } | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" } | Sort-Object -Unique)
+        Where-Object { $_.LocalPort -in 1080, 1091, 1099, 443 } | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" } | Sort-Object -Unique)
     $acu = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue).AutoConfigURL
     $gorevDurum = 'yok'
     if ($gorev) { $gorevDurum = "$($gorev.State)" }
     return [ordered]@{
         goodbyedpi_servis = ($gs -join '; '); windivert_surucu = ($wd -join '; '); goodbyedpi_surec = $gp
-        bizim_gorev = $gorevDurum; bizim_portlar = ($dinleyen -join ' ')
+        bizim_gorev = $gorevDurum; bizim_portlar = ($dinleyen -join ' '); sni_443_dinliyor = (Port-Dinliyor 443); hosts_blogu = (Hosts-Blogu-Var)
         AutoConfigURL = $acu; HTTPS_PROXY_kullanici = [Environment]::GetEnvironmentVariable('HTTPS_PROXY', 'User')
     }
 }
@@ -103,6 +112,7 @@ function Olc {
         indirme = $null
         ping = @($PING_HEDEF | ForEach-Object { Ping-Olc $_ })
         discord = @()
+        guncelleyici = $null
     }
     $c = & curl.exe -s -o NUL --noproxy '*' --max-time 90 -w '%{http_code} %{size_download} %{time_total} %{speed_download}' $INDIRME 2>$null
     $p = ("$c".Trim() -split '\s+')
@@ -110,6 +120,8 @@ function Olc {
         $s.indirme = [ordered]@{ url = $INDIRME; kod = $p[0]; bayt = [int64][double]$p[1]; sure_sn = [math]::Round([double]$p[2], 2)
             mbps = [math]::Round([double]$p[3] * 8 / 1e6, 1) }
     }
+    # Guncelleyici yolu: proxysiz updates.discord.com
+    $s.guncelleyici = Curl-Olc 'https://updates.discord.com/' $YOLLAR.dogrudan
     foreach ($u in $DISCORD_UCLAR) {
         foreach ($y in $YOLLAR.Keys) {
             $o = Curl-Olc $u $YOLLAR[$y]
@@ -127,6 +139,7 @@ function Olc {
     foreach ($t in $s.ttfb) { Write-Output "| TTFB $($t.url) | $($t.kod) / $($t.ttfb_ms) ms |" }
     if ($s.indirme) { Write-Output "| Indirme | $($s.indirme.mbps) Mbit/sn ($($s.indirme.kod)) |" }
     foreach ($g in $s.ping) { Write-Output "| Ping $($g.hedef) | $($g.ort_ms) ms, kayip $($g.kayip) |" }
+    Write-Output "| Guncelleyici (proxysiz updates.discord.com) | $($s.guncelleyici.kod) / $($s.guncelleyici.toplam_ms) ms |"
     foreach ($o in $s.discord) { Write-Output "| $($o.url) ($($o.yol)) | $($o.kod) / $($o.toplam_ms) ms |" }
 }
 
@@ -153,7 +166,7 @@ function Birlestir-Rapor {
     foreach ($k in 'aciklama', 'zaman', 'dns_onbellek') {
         $L.Add("| $k | " + (($v.Keys | ForEach-Object { Hucre $v[$_] { param($x) $x.$k } }) -join ' | ') + ' |')
     }
-    foreach ($k in 'goodbyedpi_servis', 'windivert_surucu', 'goodbyedpi_surec', 'bizim_gorev', 'bizim_portlar', 'AutoConfigURL', 'HTTPS_PROXY_kullanici') {
+    foreach ($k in 'goodbyedpi_servis', 'windivert_surucu', 'goodbyedpi_surec', 'bizim_gorev', 'bizim_portlar', 'sni_443_dinliyor', 'hosts_blogu', 'AutoConfigURL', 'HTTPS_PROXY_kullanici') {
         $L.Add("| $k | " + (($v.Keys | ForEach-Object { Hucre $v[$_] { param($x) $x.sistem.$k } }) -join ' | ') + ' |')
     }
     $L.Add('')

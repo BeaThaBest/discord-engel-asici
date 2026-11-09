@@ -1,4 +1,6 @@
-# Gecici kapatir: yonlendirme kalkar, gorev devre disi kalir (yeniden baslatmada da kapali).
+# Gecici kapatir: PAC ayari kalkar, gorev devre disi kalir (yeniden baslatmada da kapali).
+# Yetki istemez. hosts blogu KALIR: hizmet yokken updates.discord.com baglantisi reddedilir
+# (yalniz Discord guncelleyicisi etkilenir). Blogu silmek icin kaldir.ps1.
 # Geri acmak: windows\ac.ps1
 . (Join-Path $PSScriptRoot 'islevler.ps1')
 try {

@@ -1,7 +1,10 @@
-# Discord alan listesi, tek kaynak. PAC ve HTTP CONNECT koprusu buradan okur.
-# Bicim: <alan_soneki> <socks_port>
+# Discord alan listesi, tek kaynak. PAC, hosts blogu ve SNI dinleyici buradan okur.
+# Bicim: <alan_soneki> <socks_port> [hosts]
 # Sonek eslesmesi: "discord.com" hem discord.com hem *.discord.com demektir.
 # "*" iceren satirlar glob olarak eslesir. En uzun satir kazanir.
+# "hosts" isaretli satir TAM addir (sonek ya da glob degil). hosts dosyasinda 127.0.0.1 ve ::1
+# olarak yonetilen bloga girer, PAC'te DIRECT doner, yerel 443 SNI dinleyici yalniz bu adlari
+# kabul eder ve satirdaki porttaki ByeDPI uzerinden gercek adrese tunel acar.
 # 1080: ana proxy (-o 8+s). 1091: indirme proxy (-d 8+s).
 discord.com 1080
 discordapp.com 1080
@@ -13,3 +16,4 @@ discordstatus.com 1080
 dl.discordapp.net 1091
 dl2.discordapp.net 1091
 *.dl2-*.discordapp.net 1091
+updates.discord.com 1080 hosts

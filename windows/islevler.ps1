@@ -6,9 +6,12 @@ $ProgressPreference = 'SilentlyContinue'
 $APP = Join-Path $env:LOCALAPPDATA 'DiscordEngelAsici'
 $GOREV = 'DiscordEngelAsici'
 $PAC_URL = 'http://127.0.0.1:1099/proxy.pac'
-$KOPRU_URL = 'http://127.0.0.1:1098'
+# Eski surumun yazdigi HTTPS_PROXY degeri. Artik YAZILMAZ, yalniz bizimse temizlenir.
+$ESKI_PROXY = 'http://127.0.0.1:1098'
+$SNI_PORT = 443
 $IS_ANAHTAR = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
 $YEDEK = Join-Path $APP 'yedek.json'
+$HOSTS = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 
 function Yonetici-Mi {
     $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -93,7 +96,7 @@ function Hizmet-Bekle($sn) {
     $son = (Get-Date).AddSeconds($sn)
     while ((Get-Date) -lt $son) {
         $pac = Pac-Al
-        if ($pac -and $pac.Contains('FindProxyForURL') -and (Port-Acik 1098) -and
+        if ($pac -and $pac.Contains('FindProxyForURL') -and (Port-Acik $SNI_PORT) -and
             (Socks-Yanitliyor 1080) -and (Socks-Yanitliyor 1091)) { return $true }
         Start-Sleep -Milliseconds 500
     }
@@ -106,7 +109,7 @@ function Yedekle {
     $acu = Deger-Oku $IS_ANAHTAR 'AutoConfigURL'
     if ($acu -eq $PAC_URL) { $acu = $null }
     $hp = [Environment]::GetEnvironmentVariable('HTTPS_PROXY', 'User')
-    if ($hp -eq $KOPRU_URL) { $hp = $null }
+    if ($hp -eq $ESKI_PROXY) { $hp = $null }
     $y = [ordered]@{
         tarih         = (Get-Date).ToString('s')
         AutoConfigURL = $acu
@@ -117,11 +120,24 @@ function Yedekle {
     $y | ConvertTo-Json | Set-Content -LiteralPath $YEDEK -Encoding UTF8
 }
 
+function Eski-Proxy-Temizle {
+    # Yalniz eski surumun yazdigi degeri kaldirir (kullanicinin kendi HTTPS_PROXY'sine dokunmaz).
+    # Eski surum kullanicinin degerini yedege almisti: varsa onu geri koyar.
+    $hp = [Environment]::GetEnvironmentVariable('HTTPS_PROXY', 'User')
+    if ($hp -ne $ESKI_PROXY) { return }
+    $eski = $null
+    if (Test-Path -LiteralPath $YEDEK) {
+        $y = Get-Content -LiteralPath $YEDEK -Raw | ConvertFrom-Json
+        if ($y -and $y.HTTPS_PROXY -and ($y.HTTPS_PROXY -ne $ESKI_PROXY)) { $eski = $y.HTTPS_PROXY }
+    }
+    # SetEnvironmentVariable WM_SETTINGCHANGE yayinini kendisi yapar.
+    [Environment]::SetEnvironmentVariable('HTTPS_PROXY', $eski, 'User')
+}
+
 function Yonlendirmeyi-Ac {
     New-ItemProperty -Path $IS_ANAHTAR -Name AutoConfigURL -Value $PAC_URL -PropertyType String -Force | Out-Null
     WinInet-Bildir
-    # Discord guncelleyicisi PAC okumaz, yalniz HTTPS_PROXY (bkz. README).
-    [Environment]::SetEnvironmentVariable('HTTPS_PROXY', $KOPRU_URL, 'User')
+    Eski-Proxy-Temizle
 }
 
 function Yonlendirmeyi-Kapat([switch]$Tam) {
@@ -136,14 +152,62 @@ function Yonlendirmeyi-Kapat([switch]$Tam) {
             Deger-Yaz $IS_ANAHTAR 'ProxyEnable' $pe 'DWord'
             Deger-Yaz $IS_ANAHTAR 'ProxyServer' $y.ProxyServer 'String'
         }
-        $hp = $y.HTTPS_PROXY
-    } else {
-        if ((Deger-Oku $IS_ANAHTAR 'AutoConfigURL') -eq $PAC_URL) { Deger-Yaz $IS_ANAHTAR 'AutoConfigURL' $null 'String' }
-        $hp = [Environment]::GetEnvironmentVariable('HTTPS_PROXY', 'User')
-        if ($hp -eq $KOPRU_URL) { $hp = $null }
+    } elseif ((Deger-Oku $IS_ANAHTAR 'AutoConfigURL') -eq $PAC_URL) {
+        Deger-Yaz $IS_ANAHTAR 'AutoConfigURL' $null 'String'
     }
     WinInet-Bildir
-    [Environment]::SetEnvironmentVariable('HTTPS_PROXY', $hp, 'User')
+    Eski-Proxy-Temizle
+}
+
+function Dns-Temizle {
+    try { Clear-DnsClientCache -ErrorAction Stop } catch { & ipconfig.exe /flushdns | Out-Null }
+}
+
+function Port-Sahibi($port) {
+    try {
+        $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction Stop | Select-Object -First 1
+        $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+        if ($p) { return "$($p.ProcessName) (PID $($p.Id))" }
+        return "PID $($c.OwningProcess)"
+    } catch { return 'bilinmeyen surec' }
+}
+
+function Hosts-Python-Bul {
+    # (python yolu, hosts_blok.py yolu). Once kurulu gomulu Python, yoksa repodaki betik + sistem Python.
+    $py = Join-Path $APP 'python\python.exe'
+    $bl = Join-Path $APP 'ortak\hosts_blok.py'
+    if ((Test-Path -LiteralPath $py) -and (Test-Path -LiteralPath $bl)) { return @($py, $bl) }
+    $bl = Join-Path (Split-Path -Parent $PSScriptRoot) 'ortak\hosts_blok.py'
+    foreach ($ad in 'python.exe', 'py.exe') {
+        $k = Get-Command $ad -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($k -and (Test-Path -LiteralPath $bl)) { return @($k.Source, $bl) }
+    }
+    throw 'hosts blogu icin Python bulunamadi.'
+}
+
+function Hosts-Islem([string]$komut) {
+    # Yonetici gerekir. hosts_blok.py CRLF korur ve ilk yazimda yedek alir.
+    $pb = Hosts-Python-Bul
+    $a = @('-I', $pb[1], $komut, '--hosts', $HOSTS)
+    if ($komut -eq 'yaz') { $a += @('--alanlar', (Join-Path $APP 'ortak\alanlar.txt')) }
+    & $pb[0] @a
+    if ($LASTEXITCODE -ne 0) { throw "hosts blogu ($komut) basarisiz, kod $LASTEXITCODE." }
+    Dns-Temizle
+}
+
+function Yukselt-Gerekirse([string]$betik, [string]$ek) {
+    # Yonetici degilse betigi bir kez UAC ile yeniden baslatir, cikis kodunu dondurur.
+    # Zaten yoneticiyse $null doner. Ayni kullanici kimligiyle devam edilir varsayilir.
+    if (Yonetici-Mi) { return $null }
+    Write-Host 'Yonetici izni isteniyor (tek UAC istemi)...'
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $a = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Yukseltildi {1}' -f $betik, $ek
+    try {
+        $p = Start-Process -FilePath $ps -ArgumentList $a -Verb RunAs -Wait -PassThru
+    } catch {
+        throw 'Yonetici izni alinamadi (UAC reddedildi ya da hesap yonetici degil). Standart kullanici icin README bolumune bak.'
+    }
+    return $p.ExitCode
 }
 
 function Gorev-Xml([bool]$s4u) {
@@ -166,7 +230,7 @@ function Gorev-Xml([bool]$s4u) {
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Discord Engel Asici</Author>
-    <Description>Yalniz Discord trafigi icin yerel proxy (127.0.0.1:1080, 1091, 1098, 1099). Kaldirma: windows\KALDIR.cmd</Description>
+    <Description>Yalniz Discord trafigi icin yerel proxy (127.0.0.1:1080, 1091, 1099) ve hosts adlari icin 443 SNI dinleyici. Kaldirma: windows\KALDIR.cmd</Description>
   </RegistrationInfo>
   <Triggers>
     $acilis

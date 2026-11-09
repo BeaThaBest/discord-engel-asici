@@ -1,21 +1,15 @@
-import importlib.util
 import os
+import sys
 import tempfile
 import unittest
 
 KOK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ORTAK = os.path.join(KOK, "ortak")
+sys.path.insert(0, ORTAK)
 
+import alanlar as kopru  # noqa: E402
+import pac_uret as pac  # noqa: E402
 
-def yukle(ad, dosya):
-    spec = importlib.util.spec_from_file_location(ad, os.path.join(ORTAK, dosya))
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
-
-
-kopru = yukle("kopru", "connect-bridge.py")
-pac = yukle("pac", "pac_uret.py")
 KAYIT = kopru.oku(os.path.join(ORTAK, "alanlar.txt"))
 
 
@@ -49,12 +43,42 @@ class AlanSecimi(unittest.TestCase):
 
     def test_pac_ayni_liste(self):
         cikti = pac.uret(KAYIT)
-        for desen, port in KAYIT:
-            self.assertIn(desen, cikti)
-            self.assertIn(f"127.0.0.1:{port}", cikti)
+        for k in KAYIT:
+            self.assertIn(k.desen, cikti)
+            if not k.hosts:
+                self.assertIn(f"127.0.0.1:{k.port}", cikti)
         self.assertIn('return "DIRECT";', cikti)
         # Ozel alan genel alandan once gelmeli.
         self.assertLess(cikti.index('"dl.discordapp.net"'), cikti.index('"discordapp.net"'))
+
+    def test_hosts_isareti(self):
+        self.assertIn("updates.discord.com", kopru.hosts_adlari(KAYIT))
+        self.assertEqual(kopru.dinleyici_port("updates.discord.com", KAYIT), 1080)
+        self.assertEqual(kopru.dinleyici_port("UPDATES.Discord.com.", KAYIT), 1080)
+
+    def test_hosts_tam_ad_sahte_sonek(self):
+        # hosts satiri sonek degil: alt alan ve sahte onek dinleyiciye kabul edilmez.
+        for h in ("a.updates.discord.com", "evilupdates.discord.com", "updates.discord.com.evil.org",
+                  "discord.com", "cdn.discordapp.com"):
+            self.assertIsNone(kopru.dinleyici_port(h, KAYIT), h)
+        # PAC/SOCKS secimi alt ad icin discord.com sonegine duser.
+        self.assertEqual(kopru.socks_port("a.updates.discord.com", KAYIT), 1080)
+        self.assertIsNone(kopru.socks_port("updates.discord.com.evil.org", KAYIT))
+
+    def test_hosts_satiri_glob_olamaz(self):
+        with tempfile.TemporaryDirectory() as d:
+            y = os.path.join(d, "a.txt")
+            for kotu in ("*.ornek.com 1 hosts\n", "ornek.com 1 baska\n", "ornek.com 1 hosts x\n"):
+                with open(y, "w") as f:
+                    f.write(kotu)
+                with self.assertRaises(ValueError):
+                    kopru.oku(y)
+
+    def test_pac_hosts_direct(self):
+        cikti = pac.uret(KAYIT)
+        self.assertIn('if (host === "updates.discord.com") return "DIRECT";', cikti)
+        # En uzun eslesme: tam ad discord.com sonegi satirindan once gelir.
+        self.assertLess(cikti.index('"updates.discord.com"'), cikti.index('".discord.com"'))
 
     def test_ozel_dosya(self):
         with tempfile.TemporaryDirectory() as d:
@@ -65,6 +89,7 @@ class AlanSecimi(unittest.TestCase):
             self.assertEqual(kopru.socks_port("a.ornek.com", k), 1111)
             self.assertIsNone(kopru.socks_port("discord.com", k))
             self.assertIn("ornek.com", pac.uret(k))
+            self.assertEqual([x.hosts for x in k], [False])
 
 
 if __name__ == "__main__":

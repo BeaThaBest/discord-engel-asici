@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.discord-engel-asici-sni</string>
+    <key>UserName</key>
+    <string>@KULLANICI@</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>@OTO@/Discord Engel Aşıcı SNI Dinleyici (Kapatma)</string>
+        <string>@APP@/sni_dinleyici.py</string>
+        <string>--launchd</string>
+        <string>dinle</string>
+        <string>--alanlar</string>
+        <string>@APP@/alanlar.txt</string>
+        <string>--log</string>
+        <string>@APP@/log/sni.log</string>
+    </array>
+    <key>Sockets</key>
+    <dict>
+        <key>dinle</key>
+        <array>
+            <dict>
+                <key>SockNodeName</key>
+                <string>127.0.0.1</string>
+                <key>SockServiceName</key>
+                <string>443</string>
+                <key>SockType</key>
+                <string>stream</string>
+                <key>SockFamily</key>
+                <string>IPv4</string>
+            </dict>
+            <dict>
+                <key>SockNodeName</key>
+                <string>::1</string>
+                <key>SockServiceName</key>
+                <string>443</string>
+                <key>SockType</key>
+                <string>stream</string>
+                <key>SockFamily</key>
+                <string>IPv6</string>
+            </dict>
+        </array>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>2</integer>
+    <key>StandardOutPath</key>
+    <string>@APP@/log/sni-cikti.log</string>
+    <key>StandardErrorPath</key>
+    <string>@APP@/log/sni-cikti.log</string>
+</dict>
+</plist>

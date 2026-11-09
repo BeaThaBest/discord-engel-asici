@@ -1,6 +1,6 @@
 # Discord Engel Aşıcı
 
-Global anayasa geçerlidir. Bu repo, Discord engelini yalnız Discord alan adları için ByeDPI ile aşan sistemin tek kaynağıdır: `ortak/` (alan listesi, PAC üretici, HTTP CONNECT köprüsü, platformdan bağımsız), `motor/` (sabit ByeDPI sürümü ve derleme), `mac/` (LaunchAgent kurulumu), `windows/` (Görev Zamanlayıcı kurulumu, `ortak/hizmet.py` tek süreç). Çalışma kopyası `~/Library/Application Support/DiscordEngelAsici/` altındadır, repo değil.
+Global anayasa geçerlidir. Bu repo, Discord engelini yalnız Discord alan adları için ByeDPI ile aşan sistemin tek kaynağıdır: `ortak/` (alan listesi, PAC üretici, SNI dinleyici, hosts bloğu, platformdan bağımsız), `motor/` (sabit ByeDPI sürümü ve derleme), `mac/` (LaunchAgent kurulumu), `windows/` (Görev Zamanlayıcı kurulumu, `ortak/hizmet.py` tek süreç). Çalışma kopyası `~/Library/Application Support/DiscordEngelAsici/` altındadır, repo değil.
 
 ## Kabul komutları
 
