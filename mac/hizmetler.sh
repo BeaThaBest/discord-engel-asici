@@ -69,3 +69,46 @@ hizmetleri_yeniden_yukle() {
     hizmet_baslat "${h%%|*}" "${h##*|}" "$HIZMET_ESKI_PID" || return 1
   done
 }
+
+# Sistem otomatik proxy (PAC) ayari. Kablolu ya da Wi-Fi, etkin her ag hizmetine uygulanir;
+# kapatma yalniz URL'si bizim PAC olan hizmetlere dokunur.
+PAC_URL="http://127.0.0.1:1099/proxy.pac"
+ag_servisleri() { networksetup -listallnetworkservices | tail -n +2 | grep -v '^\*' || true; }
+pac_url_oku() { networksetup -getautoproxyurl "$1" | awk -F': ' '/^URL/ {print $2}'; }
+pac_ac() {
+  local s
+  while IFS= read -r s; do
+    [ -n "$s" ] || continue
+    networksetup -setautoproxyurl "$s" "$PAC_URL" || return 1
+    networksetup -setautoproxystate "$s" on || return 1
+  done < <(ag_servisleri)
+}
+pac_kapat() {
+  local s
+  while IFS= read -r s; do
+    [ -n "$s" ] || continue
+    if [ "$(pac_url_oku "$s")" = "$PAC_URL" ]; then
+      networksetup -setautoproxystate "$s" off || return 1
+    fi
+  done < <(ag_servisleri)
+}
+
+# Motor LaunchAgent plist'leri: sablondan uretilir, ByeDPI argumanlari strateji.json'dan
+# (tek kaynak) eklenir. Gerekenler: MAC, APP, OTO, PY; $APP/strateji.py ve $APP/strateji.json.
+plistleri_yaz() {
+  local h sablon hedef rol
+  for h in "${HIZMETLER[@]}"; do
+    sablon="$MAC/plist/${h%%|*}.plist"
+    hedef="$LA/$(basename "$sablon")"
+    sed -e "s|@OTO@|$OTO|g" -e "s|@APP@|$APP|g" "$sablon" > "$hedef" || return 1
+    rol=""
+    case "${h%%|*}" in
+      com.discord-engel-asici) rol=ana ;;
+      com.discord-engel-asici-dl) rol=indirme ;;
+    esac
+    if [ -n "$rol" ]; then
+      "$PY" "$APP/strateji.py" plist --strateji "$APP/strateji.json" --rol "$rol" --plist "$hedef" || return 1
+    fi
+    plutil -lint "$hedef" >/dev/null || return 1
+  done
+}

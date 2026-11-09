@@ -3,7 +3,8 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File windows\kur.ps1
 # -MotorYolu: indirme yerine yerel ciadpi.exe (ornegin motor/derle-windows.sh ciktisi).
 # Yonetici ister (hosts blogu): yukseltilmediyse kendini bir kez UAC ile yeniden baslatir.
-# Cikis kodlari: 0 tamam, 1 genel hata, 3 dogrulama gecmedi (geri alindi), 4 port 443 dolu, 5 yonetici izni yok.
+# Cikis kodlari: 0 tamam, 1 genel hata, 3 dogrulama gecmedi (geri alindi), 4 port 443 dolu, 5 yonetici izni yok,
+# 6 calisan strateji bulunamadi.
 param([string]$MotorYolu, [switch]$Yukseltildi)
 . (Join-Path $PSScriptRoot 'islevler.ps1')
 $REPO = Split-Path -Parent $PSScriptRoot
@@ -42,10 +43,10 @@ try {
     $TMP = Join-Path $env:TEMP ('dea-kur-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $APP, (Join-Path $APP 'log'), (Join-Path $APP 'ortak'), $TMP | Out-Null
 
-    Write-Host '1/7 Onceki proxy ayarlarinin yedegi'
+    Write-Host '1/8 Onceki proxy ayarlarinin yedegi'
     Yedekle
 
-    Write-Host '2/7 Eski hizmet durduruluyor (varsa)'
+    Write-Host '2/8 Eski hizmet durduruluyor (varsa)'
     if (Get-ScheduledTask -TaskName $GOREV -ErrorAction SilentlyContinue) {
         # Once devre disi: 5 dk bekcisi dosyalar degisirken yeniden baslatmasin.
         Disable-ScheduledTask -TaskName $GOREV -ErrorAction SilentlyContinue | Out-Null
@@ -57,7 +58,7 @@ try {
         throw "Port $SNI_PORT baska bir surecte dolu: $(Port-Sahibi $SNI_PORT). Discord guncelleyicisi icin 127.0.0.1:$SNI_PORT gerekir. O hizmeti (IIS, VMware, Skype vb.) durdurup yeniden dene."
     }
 
-    Write-Host "3/7 Python $($S.PYTHON_WIN_SURUM) (gomulu, konsolsuz pythonw)"
+    Write-Host "3/8 Python $($S.PYTHON_WIN_SURUM) (gomulu, konsolsuz pythonw)"
     $pyDizin = Join-Path $APP 'python'
     $pyIsaret = Join-Path $pyDizin 'DEA-SURUM.txt'
     $pyTamam = (Test-Path -LiteralPath (Join-Path $pyDizin 'pythonw.exe')) -and (Test-Path -LiteralPath $pyIsaret) -and
@@ -70,7 +71,7 @@ try {
         Set-Content -LiteralPath $pyIsaret -Value $S.PYTHON_WIN_SURUM -Encoding ASCII
     }
 
-    Write-Host '4/7 Motor (ByeDPI) ve ortak dosyalar'
+    Write-Host '4/8 Motor (ByeDPI) ve ortak dosyalar'
     $motor = Join-Path $APP 'ciadpi.exe'
     if ($MotorYolu) {
         Copy-Item -LiteralPath $MotorYolu -Destination $motor -Force
@@ -84,11 +85,21 @@ try {
         if ((Ozet $exe.FullName) -ne $S.BYEDPI_WIN_EXE_SHA256) { throw 'ciadpi.exe SHA256 uyusmuyor.' }
         Copy-Item -LiteralPath $exe.FullName -Destination $motor -Force
     }
-    foreach ($f in 'alanlar.py', 'gunluk.py', 'dns_a.py', 'sni_dinleyici.py', 'hosts_blok.py', 'hizmet.py', 'pac_uret.py', 'alanlar.txt') {
+    foreach ($f in 'alanlar.py', 'gunluk.py', 'dns_a.py', 'sni_dinleyici.py', 'hosts_blok.py', 'hizmet.py', 'pac_uret.py', 'strateji.py', 'doktor.py', 'alanlar.txt') {
         Copy-Item -LiteralPath (Join-Path $REPO "ortak\$f") -Destination (Join-Path $APP "ortak\$f") -Force
     }
 
-    Write-Host '5/7 Gorev Zamanlayici'
+    Write-Host '5/8 Strateji (bu internet saglayicisinda calisan ByeDPI ayari)'
+    if (Test-Path -LiteralPath $STRATEJI) {
+        & $PY_APP -I (Join-Path $APP 'ortak\strateji.py') goster --strateji $STRATEJI | Write-Host
+        if ($LASTEXITCODE -ne 0) { $KOD = 6; throw "$STRATEJI bozuk. windows\YENIDEN-AYARLA.cmd calistir." }
+        Write-Host '  Var olan secim korunuyor (degistirmek icin windows\YENIDEN-AYARLA.cmd).'
+    } elseif ((Strateji-Sec) -ne 0) {
+        $KOD = 6
+        throw 'Calisan strateji bulunamadi. Kurulum durdu, proxy ve hosts ayari degismedi.'
+    }
+
+    Write-Host '6/8 Gorev Zamanlayici'
     $tur = $null
     if (Yonetici-Mi) {
         try {
@@ -109,7 +120,7 @@ try {
         throw 'Hizmet 60 sn icinde hazir olmadi. Proxy ayari ACILMADI, internet etkilenmedi.'
     }
 
-    Write-Host '6/7 hosts blogu ve dogrulama (updates.discord.com)'
+    Write-Host '7/8 hosts blogu ve dogrulama (updates.discord.com)'
     $hostsYazildi = $true
     Hosts-Islem 'yaz'
     $yanit = '000'
@@ -126,13 +137,14 @@ try {
     }
     Write-Host "  updates.discord.com yaniti: $yanit"
 
-    Write-Host '7/7 Yalniz Discord icin PAC ayari ve eski HTTPS_PROXY temizligi'
+    Write-Host '8/8 Yalniz Discord icin PAC ayari ve eski HTTPS_PROXY temizligi'
     Yonlendirmeyi-Ac
     Remove-Item -LiteralPath $TMP -Recurse -Force -ErrorAction SilentlyContinue
 
     Write-Host ''
     Write-Host "KURULUM TAMAM. Gorev: $GOREV, $tur"
     Write-Host "Klasor: $APP"
+    Write-Host 'Kontrol: windows\KONTROL.cmd'
     if (Get-Process -Name Discord -ErrorAction SilentlyContinue) {
         Write-Host 'Discord acik: bir kez tamamen kapatip (tepsiden Cikis) yeniden ac.'
     }

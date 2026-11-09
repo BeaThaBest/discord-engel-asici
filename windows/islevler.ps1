@@ -12,6 +12,15 @@ $SNI_PORT = 443
 $IS_ANAHTAR = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
 $YEDEK = Join-Path $APP 'yedek.json'
 $HOSTS = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
+# Secili ByeDPI ayari, tek kaynak (ortak\strateji.py yazar, hizmet.py okur).
+$STRATEJI = Join-Path $APP 'strateji.json'
+$PY_APP = Join-Path $APP 'python\python.exe'
+
+function Strateji-Sec {
+    # Adaylari dener, ilk calisani $STRATEJI'ye yazar. Cikis kodunu dondurur (0 tamam, 2 hicbiri).
+    & $PY_APP -I (Join-Path $APP 'ortak\strateji.py') sec --motor (Join-Path $APP 'ciadpi.exe') --yaz $STRATEJI | Write-Host
+    return $LASTEXITCODE
+}
 
 function Yonetici-Mi {
     $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -213,8 +222,8 @@ function Yukselt-Gerekirse([string]$betik, [string]$ek) {
 function Gorev-Xml([bool]$s4u) {
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     $py = [Security.SecurityElement]::Escape((Join-Path $APP 'python\pythonw.exe'))
-    $arg = '"{0}" --alanlar "{1}" --motor-exe "{2}" --log "{3}"' -f (Join-Path $APP 'ortak\hizmet.py'),
-        (Join-Path $APP 'ortak\alanlar.txt'), (Join-Path $APP 'ciadpi.exe'), (Join-Path $APP 'log\hizmet.log')
+    $arg = '"{0}" --alanlar "{1}" --motor-exe "{2}" --log "{3}" --strateji "{4}"' -f (Join-Path $APP 'ortak\hizmet.py'),
+        (Join-Path $APP 'ortak\alanlar.txt'), (Join-Path $APP 'ciadpi.exe'), (Join-Path $APP 'log\hizmet.log'), $STRATEJI
     $arg = [Security.SecurityElement]::Escape($arg)
     $dizin = [Security.SecurityElement]::Escape($APP)
     $simdi = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss')

@@ -120,14 +120,23 @@ class Hizmet(unittest.TestCase):
 
 class Motor(unittest.TestCase):
     def test_komut_mac_plist_ile_ayni(self):
-        for port, ek in hizmet.MOTORLAR:
-            plistler = glob.glob(os.path.join(KOK, "mac", "plist", "*.plist"))
+        # Mac plist sablonu yalniz dinleme adresini tasir; strateji kur.sh'te eklenir
+        # (strateji.py plist). Sonuc Windows hizmetinin komutuyla ayni olmali.
+        aday = hizmet.strateji.VARSAYILAN
+        for port, ek in hizmet.motorlar(aday):
             bulunan = None
-            for p in plistler:
+            for p in glob.glob(os.path.join(KOK, "mac", "plist", "*.plist")):
                 with open(p, "rb") as f:
                     a = plistlib.load(f)["ProgramArguments"]
                 if "-p" in a and a[a.index("-p") + 1] == str(port):
-                    bulunan = a[1:]
+                    self.assertEqual(a[-1], str(port), "sablonda strateji argumani kalmamali")
+                    with tempfile.TemporaryDirectory() as d:
+                        kopya = os.path.join(d, "x.plist")
+                        with open(p, "rb") as f, open(kopya, "wb") as g:
+                            g.write(f.read())
+                        hizmet.strateji.plist_guncelle(kopya, ek)
+                        with open(kopya, "rb") as f:
+                            bulunan = plistlib.load(f)["ProgramArguments"][1:]
             self.assertEqual(hizmet.motor_komutu("x", port, ek)[1:], bulunan, port)
 
     def test_cikan_motor_yeniden_baslar(self):

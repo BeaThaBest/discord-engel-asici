@@ -9,7 +9,7 @@ set -uo pipefail
 MAC="$(cd "$(dirname "$0")" && pwd)"
 . "$MAC/hizmetler.sh"
 
-networksetup -setautoproxystate Wi-Fi off || exit 1
+pac_kapat || exit 1
 hizmetleri_durdur || { echo "HATA: hizmetler tam durmadi." >&2; exit 1; }
 # Eski tasarimdan kalma kopru ve genel HTTPS_PROXY (kur.sh tamamlanmamis).
 if yuklu_mu com.discord-engel-asici-bridge; then

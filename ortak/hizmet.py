@@ -4,8 +4,9 @@ Tek surec, platformdan bagimsiz giris noktasi (Windows bunu kullanir, Mac ayri
 LaunchAgent'larla ayni parcalari calistirir):
   * 1099: proxy.pac (pac_uret.py ciktisinin aynisi, bellekten sunulur)
   * 443: SNI dinleyici (sni_dinleyici.py), hosts dosyasindaki Discord adlari icin
-  * --motor-exe verilirse ByeDPI surecleri (1080 -o 8+s, 1091 -d 8+s) gozetilir,
-    cikarsa yeniden baslatilir. Windows'ta konsol penceresi acilmaz.
+  * --motor-exe verilirse ByeDPI surecleri (1080 ana, 1091 indirme) gozetilir,
+    cikarsa yeniden baslatilir. Windows'ta konsol penceresi acilmaz. Argumanlar
+    --strateji dosyasindan (strateji.py, tek kaynak); verilmezse strateji.VARSAYILAN.
 Hepsi yalniz 127.0.0.1 dinler. Yalniz standart kutuphane.
 """
 import argparse
@@ -20,17 +21,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import alanlar  # noqa: E402
 import pac_uret  # noqa: E402
 import sni_dinleyici  # noqa: E402
+import strateji  # noqa: E402
 from gunluk import gunluk_kur, log  # noqa: E402
 
-# Mac plist'leriyle ayni (tests/ bunu karsilastirir).
-MOTORLAR = ((1080, ("-o", "8+s")), (1091, ("-d", "8+s")))
 PAC_YOLU = "/proxy.pac"
 # Windows: alt surec icin konsol penceresi olusturma.
 PENCERESIZ = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-def motor_komutu(exe, port, ek):
-    return [exe, "-i", "127.0.0.1", "-p", str(port), *ek]
+motor_komutu = strateji.motor_komutu
+
+
+def motorlar(aday):
+    """((port, argumanlar), ...) secili stratejiden."""
+    return ((strateji.ANA_PORT, aday.ana), (strateji.INDIRME_PORT, aday.indirme))
 
 
 def pac_yaniti(istek, pac):
@@ -119,7 +123,7 @@ def sunucu_ac_bekle(port, sure=60):
 
 
 def baslat(alan_yolu, pac_port, sni_port, motor_exe=None, dur=None, cozucu=None,
-           sni_dinle=("127.0.0.1", "::1")):
+           sni_dinle=("127.0.0.1", "::1"), aday=strateji.VARSAYILAN):
     """Sunuculari ve motorlari arka planda baslatir.
     (pac_srv, sni_soketleri, dur) dondurur. SNI dinleyici (443) acilamazsa PAC ve motor
     yine de calisir, hata loglanir (sni_soketleri bos liste)."""
@@ -127,7 +131,7 @@ def baslat(alan_yolu, pac_port, sni_port, motor_exe=None, dur=None, cozucu=None,
     kayitlar = alanlar.oku(alan_yolu)
     pac = pac_uret.uret(kayitlar).encode("utf-8")
     if motor_exe:
-        for port, ek in MOTORLAR:
+        for port, ek in motorlar(aday):
             threading.Thread(target=motor_gozet, args=(motor_komutu(motor_exe, port, ek), dur),
                              daemon=True).start()
     pac_srv = sunucu_ac_bekle(pac_port)
@@ -138,9 +142,9 @@ def baslat(alan_yolu, pac_port, sni_port, motor_exe=None, dur=None, cozucu=None,
     except OSError as e:
         log.error("SNI dinleyici acilamadi: %s", e)
         sni_soketleri = []
-    log.warning("hizmet hazir: pac %s, sni %s, motor %s, %s alan",
+    log.warning("hizmet hazir: pac %s, sni %s, motor %s (strateji %s), %s alan",
                 pac_srv.getsockname()[1], [s.getsockname()[1] for s in sni_soketleri],
-                "var" if motor_exe else "yok", len(kayitlar))
+                "var" if motor_exe else "yok", aday.ad, len(kayitlar))
     return pac_srv, sni_soketleri, dur
 
 
@@ -150,12 +154,14 @@ def main():
     ap.add_argument("--pac-port", type=int, default=1099)
     ap.add_argument("--sni-port", type=int, default=443)
     ap.add_argument("--motor-exe", help="ciadpi yolu; verilirse 1080 ve 1091 gozetilir")
+    ap.add_argument("--strateji", help="strateji.json; verilirse okunamazsa hizmet durur")
     ap.add_argument("--log", help="boyut sinirli log dosyasi")
     ap.add_argument("--ayrinti", action="store_true")
     a = ap.parse_args()
     gunluk_kur(a.log, a.ayrinti)
     try:
-        _, _, dur = baslat(a.alanlar, a.pac_port, a.sni_port, a.motor_exe)
+        aday = strateji.oku(a.strateji) if a.strateji else strateji.VARSAYILAN
+        _, _, dur = baslat(a.alanlar, a.pac_port, a.sni_port, a.motor_exe, aday=aday)
         dur.wait()
     except Exception:
         log.exception("hizmet durdu")

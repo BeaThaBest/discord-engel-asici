@@ -11,8 +11,6 @@
         <string>127.0.0.1</string>
         <string>-p</string>
         <string>1080</string>
-        <string>-o</string>
-        <string>8+s</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
