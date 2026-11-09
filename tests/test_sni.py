@@ -288,10 +288,31 @@ class UctanUca(unittest.TestCase):
         bas = time.monotonic()
         s.sendall(client_hello("updates.discord.com"))
         self.assertEqual(s.recv(100), b"")
-        self.assertLess(time.monotonic() - bas, 2)
+        # "Hemen": Windows reddedilen yerel baglantida SYN'i ~2 sn yeniden dener; urun bunu
+        # beklememeli (yerel baglanti suresi kisa). Sinir o 2 sn'nin cok altinda.
+        self.assertLess(time.monotonic() - bas, 1)
         s.close()
         with self.assertRaises(socket.timeout):
             hedef.accept()
+
+    def test_yerel_socks_baglantisi_kisa_sureli_el_sikisma_uzun(self):
+        # Kok neden: create_connection(timeout=15) Windows'ta olu porta ~2 sn takilir.
+        # Yerel adim YEREL_BAGLANTI_SURESI ile sinirli, SOCKS el sikismasi BAGLANTI_SURESI ile.
+        self.assertLess(sni.YEREL_BAGLANTI_SURESI, 0.5)
+        socks = SahteSocks()
+        self.addCleanup(socks.kapat)
+        gercek = socket.create_connection
+        sureler = []
+
+        def izle(adres, timeout=None, *a, **k):
+            sureler.append(timeout)
+            return gercek(adres, timeout, *a, **k)
+
+        sni.socket.create_connection = izle
+        self.addCleanup(lambda: setattr(sni.socket, "create_connection", gercek))
+        s = sni.socks5_connect_ip(("127.0.0.1", socks.port), "192.0.2.9", 443)
+        s.close()
+        self.assertEqual(sureler, [sni.YEREL_BAGLANTI_SURESI])
 
     def test_yalniz_istenen_adreste_dinler(self):
         soketler = sni.soketleri_ac(0, ("127.0.0.1",))

@@ -4,6 +4,7 @@ YENI PID'in portu dinledigini dogrulamali. Sahte launchctl ve lsof ile calisir."
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -34,6 +35,8 @@ exit 0
 """
 
 
+@unittest.skipUnless(sys.platform == "darwin",
+                     "mac/hizmetler.sh yalniz macOS icin: bash, launchctl, lsof ve sleep gerekir")
 class HizmetIslevleri(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

@@ -31,7 +31,11 @@ from gunluk import gunluk_kur, log  # noqa: E402
 HEDEF_PORT = 443
 MAX_HELLO = 32768          # ClientHello govdesi ust siniri (gercekte < 2 KB, PQ ile ~ 2 KB)
 HELLO_SURESI = 10          # ClientHello'nun tamamlanmasi icin toplam sure (sn)
-BAGLANTI_SURESI = 15       # SOCKS baglanti kurma suresi
+BAGLANTI_SURESI = 15       # SOCKS el sikismasi (CONNECT yaniti; ByeDPI uzak sunucuya baglanir)
+# 127.0.0.1'deki ByeDPI'ye TCP baglantisi. Canli motor aninda kabul eder. Windows reddedilen
+# baglantida SYN'i yaklasik 2 sn yeniden dener (Mac/Linux aninda ECONNREFUSED): motor yokken
+# istemcinin 2 sn takilmamasi icin ilk yeniden denemeden (~0,5 sn) once vazgecilir.
+YEREL_BAGLANTI_SURESI = 0.3
 MAX_IP = 3                 # denenecek en cok gercek adres
 
 
@@ -154,10 +158,11 @@ def _tam_oku(s, n):
 def socks5_connect_ip(upstream, ip, port, sure=BAGLANTI_SURESI):
     """IPv4 ADRESLE CONNECT (ad vermek hosts yuzunden dongu yapar)."""
     try:
-        s = socket.create_connection(upstream, timeout=sure)
+        s = socket.create_connection(upstream, timeout=YEREL_BAGLANTI_SURESI)
     except OSError as e:
-        raise SocksYok(str(e))
+        raise SocksYok(f"{upstream[0]}:{upstream[1]} motor yanit vermedi: {e}")
     try:
+        s.settimeout(sure)
         s.sendall(b"\x05\x01\x00")
         if _tam_oku(s, 2) != b"\x05\x00":
             raise OSError("socks no-auth reddedildi")
