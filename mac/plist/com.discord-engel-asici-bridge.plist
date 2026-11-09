@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.discord-engel-asici-bridge</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>@OTO@/Discord Engel Aşıcı Güncelleme Köprüsü (Kapatma)</string>
+        <string>@APP@/connect-bridge.py</string>
+        <string>--port</string>
+        <string>1098</string>
+        <string>--alanlar</string>
+        <string>@APP@/alanlar.txt</string>
+        <string>--log</string>
+        <string>@APP@/log/kopru.log</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>@APP@/log/kopru-cikti.log</string>
+    <key>StandardErrorPath</key>
+    <string>@APP@/log/kopru-cikti.log</string>
+</dict>
+</plist>

@@ -1,0 +1,15 @@
+# ByeDPI sabit surum. Sh ile kaynaklanabilir (KEY=DEGER).
+BYEDPI_ETIKET=v0.17.3
+BYEDPI_SURUM_CIKTISI=17.3
+BYEDPI_URL=https://github.com/hufrea/byedpi/archive/refs/tags/v0.17.3.tar.gz
+BYEDPI_SHA256=0a9cb8585554c68c3e2be88c33c9bf6f99f8e8c7f54b362285adab99e262566c
+# Windows: resmi release varligi (yazarin yukledigi, GitHub digest ile ayni).
+# kur.ps1 zip'i indirip SHA256 dogrular, icindeki ciadpi.exe'yi de dogrular.
+# motor/derle-windows.sh ayni kaynaktan bagimsiz capraz derleme yapar (karsilastirma icin).
+BYEDPI_WIN_URL=https://github.com/hufrea/byedpi/releases/download/v0.17.3/byedpi-17.3-x86_64-w64.zip
+BYEDPI_WIN_SHA256=70d2c94147193cb915f9c6eb5144b8d404dacbcfa90bda2383b6b211afafa456
+BYEDPI_WIN_EXE_SHA256=eb53ceeeb981cc6735ac24bb1e51e725280b86630e80fdf19ddc4ee4a5b54ef4
+# Windows Python calisma zamani: python.org embeddable (pythonw.exe konsolsuz). SHA256 python.org API'sinden.
+PYTHON_WIN_SURUM=3.14.10
+PYTHON_WIN_URL=https://www.python.org/ftp/python/3.14.10/python-3.14.10-embed-amd64.zip
+PYTHON_WIN_SHA256=90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159
